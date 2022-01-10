@@ -1,6 +1,19 @@
 const dotenv = require("dotenv").config();
 const discord = require("discord.js");
 const https = require("https");
+const mongoose = require("mongoose");
+mongoose.connect(process.env.DATABASE_LOCATION, (err) => {
+  if (err) console.log("Failed to connect to the database");
+  else console.log("Connected to database");
+});
+
+const meowSchema = new mongoose.Schema({
+  meowerID: String,
+  meowedID: String,
+});
+
+const Meow = mongoose.model("Meow", meowSchema);
+
 const client = new discord.Client({
   allowedMentions: {
     parse: ["users", "roles"],
@@ -20,6 +33,7 @@ client.on("ready", () => {
 });
 
 client.on("messageCreate", (msg) => {
+  console.log(msg.content);
   if (msg.content.startsWith(".cat")) {
     // TODO specify gif for a gif
     //encouragingMessage = msg.content.split("$new ")[1] get string after command
@@ -75,7 +89,7 @@ client.on("messageCreate", (msg) => {
       console.log(error);
     });
     req.end();
-  } else if (msg.content.startsWith(".breed")) {
+  } else if (msg.content.startsWith(".breed ")) {
     // Get info about a particular Breed
     let command = msg.content.split(" ");
     // Inform Users about command usage if incorrect
@@ -105,7 +119,6 @@ client.on("messageCreate", (msg) => {
           .on("end", () => {
             console.log("Data for breed info has been received");
             // Once all data has been received, send the image URL
-            let response = "";
             let catData = JSON.parse(Buffer.concat(buffers).toString());
             if (catData != 0) {
               // On successful breed found, send another request to the Cat API to get a picture of the breed
@@ -132,7 +145,7 @@ client.on("messageCreate", (msg) => {
                         Buffer.concat(catImgURLBuffer).toString()
                       ).url;
                       // Generate response to send to users
-                      response +=
+                      let response =
                         "Breed: " +
                         catData[0].name +
                         "\nAffection Level: " +
@@ -152,26 +165,8 @@ client.on("messageCreate", (msg) => {
               catImgReq.on("error", (error) => {
                 console.error("Error in searching cat by ID.");
                 console.log(error);
-                //reject("");
               });
               catImgReq.end();
-              // searchCatByID(catData[0].reference_image_id).then((urlResult) => {
-              //   // I present to you: VS Code's ""Prettify""" Extension
-              //   response +=
-              //     "Breed: " +
-              //     catData[0].name +
-              //     "\nAffection Level: " +
-              //     getStars(catData[0].affection_level) +
-              //     "\nEnergy Level: " +
-              //     getStars(catData[0].energy_level) +
-              //     "\nIntelligence: " +
-              //     getStars(catData[0].intelligence) +
-              //     "\n" +
-              //     catData[0].description +
-              //     "\n" +
-              //     urlResult;
-              //   msg.channel.send(response);
-              // });
             } else {
               msg.channel.send(
                 'Breed name of "' +
@@ -187,40 +182,34 @@ client.on("messageCreate", (msg) => {
       });
       req.end();
     }
+  } else if (msg.content.startsWith(".meow")) {
+    let command = msg.content.split(" ");
+    if (command.length < 2) {
+      // TODO change to separate commands to see other peoples stats
+      Meow.countDocuments({ meowerID: msg.author.id }, (err, numMeow) => {
+        Meow.countDocuments({ meowedID: msg.author.id }, (errn, numMeowed) => {
+          if (!(err || errn))
+            msg.channel.send(
+              `<@!${msg.author.id}> Stats:\nMeow'd at others: ${numMeow}\nMeow'd by others: ${numMeowed}`
+            );
+        });
+      });
+    } else {
+      let re = new RegExp("<@!*&*[0-9]+>");
+      let meowerID = msg.author.id;
+      let meowedID = command[1].substring(3, 21);
+      if (re.test(command[1]) && meowerID !== meowedID) {
+        let newMeow = new Meow({
+          meowerID: meowerID,
+          meowedID: meowedID,
+        }).save((err, result) => {
+          if (!err) msg.channel.send(`<@!${meowerID}> just meow'd....`);
+          else console.log(err);
+        });
+      }
+    }
   }
 });
-
-// what this fuck even is this
-function searchCatByID(id) {
-  console.log(`finding cat image id of ${id}`);
-  let options = {
-    hostname: "api.thecatapi.com",
-    path: "https://api.thecatapi.com/v1/images/" + id,
-    headers: { "x-api-key": process.env.CAT_API_KEY },
-  };
-  let buffers = [];
-  let promise = new Promise(function (resolve, reject) {
-    const req = https.request(options, (res) => {
-      res
-        .on("data", (data) => {
-          // Push data to a buffer to ensure we get full response first
-          buffers.push(data);
-        })
-        .on("end", () => {
-          // Once all data has been received, resolve the image URL
-          let catData = JSON.parse(Buffer.concat(buffers).toString());
-          resolve(catData.url);
-        });
-    });
-    req.on("error", (error) => {
-      console.error("Error in searching cat by ID.");
-      console.log(error);
-      reject("");
-    });
-    req.end();
-  });
-  return promise;
-}
 
 function getStars(numberOfStars) {
   let result = "";
