@@ -81,7 +81,7 @@ client.on("messageCreate", async (msg) => {
       }
     );
 
-    if (breedData?.data?.length == 0) {
+    if (breedResponse?.data?.length == 0) {
       msg.channel.send(
         'Breed name of "' +
           breedData.replace(/%20/g, " ") +
